@@ -1,0 +1,9 @@
+process.env.NODE_ENV = 'test';
+process.env.DATABASE_URL = process.env.DATABASE_URL || 'file:./test.db';
+process.env.APP_URL = 'http://localhost:5173';
+process.env.WEB_ORIGIN = 'http://localhost:5173';
+process.env.CRON_SECRET = 'test-cron-secret';
+process.env.TRUST_PROXY = 'false';
+process.env.ADMIN_NAME = 'Test Admin';
+process.env.ADMIN_EMAIL = 'admin@test.local';
+process.env.ADMIN_PASSWORD = 'Adminpass1';
