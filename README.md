@@ -2,7 +2,7 @@
 
 Track every rupee: expenses, income and investments in one calm place.
 
-Mobile-first multi-user expense tracker (React + NestJS + SQLite). Installable PWA.
+Mobile-first multi-user expense tracker (React + NestJS + Postgres). Installable PWA.
 
 **Project folder:** `C:\Users\ADMIN\Desktop\PennyWise`
 
@@ -29,7 +29,7 @@ npm run dev
 
 ## Stack
 
-- **API:** NestJS, Prisma, SQLite (`BigInt` paise)
+- **API:** NestJS, Prisma, Postgres (`BigInt` paise)
 - **Web:** React, Vite, Tailwind, Chart.js, vite-plugin-pwa
 - **Auth:** httpOnly session cookie; admin creates users (no public signup)
 
@@ -39,9 +39,9 @@ npm run dev
 npm test
 ```
 
-## MySQL later
+## Database
 
-Change `provider` in `apps/api/prisma/schema.prisma` to `mysql`, set `DATABASE_URL`, run migrations — app logic stays the same.
+Set `DATABASE_URL` in `apps/api/.env` to your Postgres connection string (Supabase works). Then run `npx prisma migrate deploy` and `npm run seed` from `apps/api`.
 
 ## Architecture
 
