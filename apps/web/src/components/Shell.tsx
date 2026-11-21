@@ -1,23 +1,25 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { useAuth } from '../lib/auth'
+import { canUse, type ModuleId } from '../lib/modules'
 
-const nav = [
-  { to: '/', label: 'Home', icon: '⌂' },
-  { to: '/transactions', label: 'Transactions', icon: '≡' },
-  { to: '/add', label: 'Add', fab: true },
-  { to: '/investments', label: 'Investments', icon: '◔' },
+const nav: { to: string; label: string; icon?: string; fab?: boolean; module?: ModuleId }[] = [
+  { to: '/', label: 'Home', icon: '⌂', module: 'transactions' },
+  { to: '/transactions', label: 'Transactions', icon: '≡', module: 'transactions' },
+  { to: '/add', label: 'Add', fab: true, module: 'transactions' },
+  { to: '/investments', label: 'Investments', icon: '◔', module: 'investments' },
   { to: '/more', label: 'More', icon: '⋯' },
 ]
 
-const sidebar = [
-  { to: '/', label: 'Dashboard' },
-  { to: '/transactions', label: 'Transactions' },
-  { to: '/investments', label: 'Investments' },
-  { to: '/accounts', label: 'Accounts' },
-  { to: '/categories', label: 'Categories' },
-  { to: '/budgets', label: 'Budgets' },
-  { to: '/goals', label: 'Goals' },
-  { to: '/recurring', label: 'Recurring' },
-  { to: '/reports', label: 'Reports' },
+const sidebar: { to: string; label: string; module?: ModuleId }[] = [
+  { to: '/', label: 'Dashboard', module: 'transactions' },
+  { to: '/transactions', label: 'Transactions', module: 'transactions' },
+  { to: '/investments', label: 'Investments', module: 'investments' },
+  { to: '/accounts', label: 'Accounts', module: 'transactions' },
+  { to: '/categories', label: 'Categories', module: 'transactions' },
+  { to: '/budgets', label: 'Budgets', module: 'budgets' },
+  { to: '/goals', label: 'Goals', module: 'goals' },
+  { to: '/recurring', label: 'Recurring', module: 'recurring' },
+  { to: '/reports', label: 'Reports', module: 'reports' },
   { to: '/settings', label: 'Settings' },
   { to: '/more', label: 'More' },
 ]
@@ -30,7 +32,11 @@ function linkClass(active: boolean) {
 
 export function Shell() {
   const location = useLocation()
+  const { user } = useAuth()
   const hideNav = location.pathname === '/add'
+  const allowed = (module?: ModuleId) => !module || canUse(user?.modules, module, user?.role)
+  const mobileNav = nav.filter((item) => allowed(item.module))
+  const desktopNav = sidebar.filter((item) => allowed(item.module))
 
   return (
     <div className="flex min-h-dvh bg-[var(--bg)]">
@@ -40,7 +46,7 @@ export function Shell() {
           <p className="text-sm text-[var(--muted)]">Every rupee, calmly</p>
         </div>
         <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-contain pr-1">
-          {sidebar.map((item) => (
+          {desktopNav.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -53,12 +59,14 @@ export function Shell() {
             </NavLink>
           ))}
         </nav>
-        <NavLink
-          to="/add"
-          className="mt-3 flex min-h-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--btn)] text-sm font-semibold text-[var(--surface)]"
-        >
-          Add transaction
-        </NavLink>
+        {allowed('transactions') ? (
+          <NavLink
+            to="/add"
+            className="mt-3 flex min-h-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--btn)] text-sm font-semibold text-[var(--surface)]"
+          >
+            Add transaction
+          </NavLink>
+        ) : null}
       </aside>
       <div className="flex min-h-dvh min-w-0 flex-1 flex-col">
         <main className={`mx-auto w-full max-w-3xl flex-1 px-4 pb-28 pt-4 safe-top md:pb-8 md:pt-8 ${hideNav ? 'pb-8' : ''}`}>
@@ -70,7 +78,7 @@ export function Shell() {
             aria-label="Main"
           >
             <ul className="mx-auto flex max-w-lg items-stretch justify-between px-2 pt-1">
-              {nav.map((item) =>
+              {mobileNav.map((item) =>
                 item.fab ? (
                   <li key={item.to} className="flex flex-1 justify-center">
                     <NavLink

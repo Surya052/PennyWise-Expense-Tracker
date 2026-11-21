@@ -1,16 +1,17 @@
 import { Link } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
+import { canUse, type ModuleId } from '../lib/modules'
 import { Card } from '../components/Card'
 import { apiFetch } from '../lib/api'
 
-const links = [
+const links: { to: string; label: string; desc: string; module?: ModuleId }[] = [
   { to: '/settings', label: 'Settings', desc: 'Profile, theme, export' },
-  { to: '/accounts', label: 'Accounts', desc: 'Cash, bank, cards' },
-  { to: '/categories', label: 'Categories', desc: 'Organise spending' },
-  { to: '/budgets', label: 'Budgets', desc: 'Monthly limits' },
-  { to: '/goals', label: 'Goals', desc: 'Savings targets' },
-  { to: '/recurring', label: 'Recurring', desc: 'Rent, salary, SIP' },
-  { to: '/reports', label: 'Reports', desc: 'Excel, CSV, PDF, import' },
+  { to: '/accounts', label: 'Accounts', desc: 'Cash, bank, cards', module: 'transactions' },
+  { to: '/categories', label: 'Categories', desc: 'Organise spending', module: 'transactions' },
+  { to: '/budgets', label: 'Budgets', desc: 'Monthly limits', module: 'budgets' },
+  { to: '/goals', label: 'Goals', desc: 'Savings targets', module: 'goals' },
+  { to: '/recurring', label: 'Recurring', desc: 'Rent, salary, SIP', module: 'recurring' },
+  { to: '/reports', label: 'Reports', desc: 'Excel, CSV, PDF, import', module: 'reports' },
 ]
 
 export function More() {
@@ -25,7 +26,7 @@ export function More() {
         <p className="text-sm text-[var(--muted)]">{user?.email}</p>
       </Card>
       <ul className="flex flex-col gap-2">
-        {links.map((item) => (
+        {links.filter((item) => !item.module || canUse(user?.modules, item.module, user?.role)).map((item) => (
           <li key={item.to}>
             <Link to={item.to} className="block rounded-[18px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 shadow-[var(--shadow)]">
               <p className="font-medium text-[var(--text)]">{item.label}</p>

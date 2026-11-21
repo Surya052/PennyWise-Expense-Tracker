@@ -6,6 +6,7 @@ import { BooksService } from './books.service';
 import { assertNotLastAdmin, normalizeEmail, publicUser } from './auth.service';
 import { assertPassword } from './common/password';
 import { fail } from './common/money';
+import { normalizeModules, userModules } from './common/modules';
 import { kolkataStart, todayInKolkata } from './common/dates';
 
 @Injectable()
@@ -39,6 +40,7 @@ export class AdminService {
       isActive: user.isActive,
       createdAt: user.createdAt,
       lastLoginAt: user.lastLoginAt,
+      modules: userModules(user),
       transactionCount: user._count.transactions,
       accountCount: user._count.accounts,
     }));
@@ -50,15 +52,16 @@ export class AdminService {
     const email = normalizeEmail(body.email);
     const password = assertPassword(body.password);
     const role = body.role === 'admin' ? 'admin' : 'user';
+    const modules = normalizeModules(body.modules, role);
     const existing = await this.prisma.user.findUnique({ where: { email } });
     if (existing) fail('That email is already in use');
     const passwordHash = await bcrypt.hash(password, 12);
     const user = await this.prisma.user.create({
-      data: { name, email, passwordHash, role, mustChangePassword: true, createdById: admin.id },
+      data: { name, email, passwordHash, role, modules, mustChangePassword: true, createdById: admin.id },
     });
     await this.books.seedCategories(this.prisma, user.id);
-    await this.audit(admin, 'user.create', user.id, { email, name, role }, ip);
-    return { id: user.id, name: user.name, email: user.email, role: user.role };
+    await this.audit(admin, 'user.create', user.id, { email, name, role, modules }, ip);
+    return { id: user.id, name: user.name, email: user.email, role: user.role, modules };
   }
 
   async update(admin: User, id: string, body: Record<string, unknown>, ip: string) {
@@ -67,13 +70,14 @@ export class AdminService {
     if (!name || name.length > 80) fail('Name is required');
     const role = body.role == null ? user.role : body.role === 'admin' ? 'admin' : 'user';
     const isActive = body.isActive == null ? user.isActive : Boolean(body.isActive);
+    const modules = body.modules == null ? userModules({ role, modules: user.modules }) : normalizeModules(body.modules, role);
     if ((role !== 'admin' || !isActive) && user.role === 'admin' && user.isActive) {
       await assertNotLastAdmin(this.prisma, user);
     }
-    const updated = await this.prisma.user.update({ where: { id }, data: { name, role, isActive } });
+    const updated = await this.prisma.user.update({ where: { id }, data: { name, role, isActive, modules } });
     if (!isActive) await this.prisma.session.deleteMany({ where: { userId: id } });
-    await this.audit(admin, 'user.update', id, { email: updated.email, name, role, isActive }, ip);
-    return { id, name, role, isActive };
+    await this.audit(admin, 'user.update', id, { email: updated.email, name, role, isActive, modules }, ip);
+    return { id, name, role, isActive, modules };
   }
 
   async resetPassword(admin: User, id: string, body: Record<string, unknown>, ip: string) {

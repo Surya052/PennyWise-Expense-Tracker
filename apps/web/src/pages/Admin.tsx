@@ -4,6 +4,7 @@ import { apiFetch, ApiError } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { Card } from '../components/Card'
 import { Skeleton } from '../components/Skeleton'
+import { MODULES } from '../lib/modules'
 
 type Stats = { total: number; active: number; newThisMonth: number }
 
@@ -15,6 +16,7 @@ type AdminUser = {
   isActive: boolean
   createdAt: string
   lastLoginAt: string | null
+  modules: string[]
   transactionCount: number
   accountCount: number
 }
@@ -39,6 +41,7 @@ export function Admin() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [role, setRole] = useState<'user' | 'admin'>('user')
+  const [modules, setModules] = useState<string[]>(MODULES.map((item) => item.id))
   const [error, setError] = useState('')
 
   if (user?.role !== 'admin') return <Navigate to="/" replace />
@@ -69,7 +72,7 @@ export function Admin() {
     try {
       await apiFetch('/admin/users', {
         method: 'POST',
-        body: JSON.stringify({ name, email, password, role }),
+        body: JSON.stringify({ name, email, password, role, modules }),
       })
       setName('')
       setEmail('')
@@ -111,6 +114,7 @@ export function Admin() {
             <option value="user">User</option>
             <option value="admin">Admin</option>
           </select>
+          <ModulePicker value={modules} onChange={setModules} disabled={role === 'admin'} />
           {error ? <p className="text-sm text-[var(--expense)]">{error}</p> : null}
           <button type="submit" className="min-h-11 rounded-2xl bg-[var(--btn)] font-semibold text-[var(--surface)]">
             Create
@@ -138,7 +142,16 @@ export function Admin() {
                     {u.transactionCount} tx · {u.accountCount} accounts
                   </p>
                 </div>
-                <ButtonRow onToggle={() => void toggleActive(u)} onDelete={() => void removeUser(u.id)} active={u.isActive} />
+                <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
+                  <ButtonRow onToggle={() => void toggleActive(u)} onDelete={() => void removeUser(u.id)} active={u.isActive} />
+                  <UserAccess
+                    user={u}
+                    onSave={async (next) => {
+                      await apiFetch(`/admin/users/${u.id}`, { method: 'PATCH', body: JSON.stringify({ modules: next }) })
+                      load()
+                    }}
+                  />
+                </div>
               </li>
             ))}
           </ul>
@@ -173,6 +186,71 @@ function StatsGrid({ stats }: { stats: Stats }) {
         <p className="text-xs text-[var(--muted)]">New this month</p>
         <p className="text-2xl font-semibold tabular-nums">{stats.newThisMonth}</p>
       </Card>
+    </div>
+  )
+}
+
+function ModulePicker({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: string[]
+  onChange: (next: string[]) => void
+  disabled?: boolean
+}) {
+  return (
+    <fieldset className="grid gap-2 sm:grid-cols-2" disabled={disabled}>
+      <legend className="mb-1 text-sm font-medium">Modules</legend>
+      {MODULES.map((item) => (
+        <label key={item.id} className="flex items-start gap-2 rounded-xl border border-[var(--border)] px-3 py-2 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={disabled || value.includes(item.id)}
+            onChange={(e) => {
+              onChange(e.target.checked ? [...value, item.id] : value.filter((id) => id !== item.id))
+            }}
+          />
+          <span>
+            <span className="block font-medium">{item.label}</span>
+            <span className="block text-xs text-[var(--muted)]">{item.hint}</span>
+          </span>
+        </label>
+      ))}
+      {disabled ? <p className="text-xs text-[var(--muted)] sm:col-span-2">Admins can use every module.</p> : null}
+    </fieldset>
+  )
+}
+
+function UserAccess({ user, onSave }: { user: AdminUser; onSave: (modules: string[]) => Promise<void> }) {
+  const [open, setOpen] = useState(false)
+  const [modules, setModules] = useState(user.modules ?? [])
+  const [busy, setBusy] = useState(false)
+  if (user.role === 'admin') return <p className="text-xs text-[var(--muted)]">All modules</p>
+  return (
+    <div className="w-full sm:w-80">
+      <button type="button" onClick={() => setOpen((value) => !value)} className="min-h-10 text-sm text-[var(--primary)]">
+        {open ? 'Hide access' : 'Edit access'}
+      </button>
+      {open ? (
+        <div className="mt-2 flex flex-col gap-2">
+          <ModulePicker value={modules} onChange={setModules} />
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              setBusy(true)
+              void onSave(modules).finally(() => setBusy(false))
+            }}
+            className="min-h-10 rounded-xl bg-[var(--btn)] text-sm font-semibold text-[var(--surface)] disabled:opacity-60"
+          >
+            {busy ? 'Saving…' : 'Save access'}
+          </button>
+        </div>
+      ) : (
+        <p className="text-xs text-[var(--muted)]">{(user.modules ?? []).join(', ') || 'No modules'}</p>
+      )}
     </div>
   )
 }

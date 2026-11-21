@@ -21,6 +21,7 @@ model User {
   dateFormat         String    @default("DD/MM/YYYY")
   monthStartDay      Int       @default(1)
   theme              String    @default("system")
+  modules            String[]  @default(["transactions", "investments", "budgets", "goals", "recurring", "reports"])
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
   sessions           Session[]

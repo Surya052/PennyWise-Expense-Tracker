@@ -1,6 +1,7 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
 import { sha256 } from './common/password';
+import { moduleForPath, userModules } from './common/modules';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -19,6 +20,10 @@ export class AuthGuard implements CanActivate {
     const allowed = /\/api\/auth\/(logout|change-password|me)(\?|$)/.test(path);
     if (session.user.mustChangePassword && !allowed) {
       throw new ForbiddenException({ message: 'Password change required', code: 'PASSWORD_CHANGE_REQUIRED' });
+    }
+    const required = moduleForPath(path);
+    if (required && !userModules(session.user).includes(required)) {
+      throw new ForbiddenException({ message: 'That module is turned off for this account' });
     }
     return true;
   }

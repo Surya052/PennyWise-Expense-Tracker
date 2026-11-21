@@ -11,6 +11,7 @@ export type PublicUser = {
   dateFormat: string
   monthStartDay: number
   theme: 'light' | 'dark' | 'system'
+  modules: string[]
 }
 
 type AuthState = {

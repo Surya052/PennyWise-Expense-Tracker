@@ -6,6 +6,7 @@ import { PrismaService } from './prisma.service';
 import { BooksService } from './books.service';
 import { assertPassword, clearRateLimit, randomToken, rateLimit, sha256 } from './common/password';
 import { fail } from './common/money';
+import { userModules } from './common/modules';
 
 const COOKIE = 'pw_session';
 
@@ -208,6 +209,7 @@ export function publicUser(user: User) {
     dateFormat: user.dateFormat,
     monthStartDay: user.monthStartDay,
     theme: user.theme,
+    modules: userModules(user),
   };
 }
 

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import { AuthProvider, useAuth } from './lib/auth'
 import { ToastProvider } from './lib/toast'
@@ -19,6 +20,7 @@ import { Goals } from './pages/Goals'
 import { Recurring } from './pages/Recurring'
 import { Reports } from './pages/Reports'
 import { Admin } from './pages/Admin'
+import { canUse, firstAllowedPath, type ModuleId } from './lib/modules'
 
 function Spinner() {
   return (
@@ -42,6 +44,15 @@ function RequirePasswordChange() {
   if (!user) return <Navigate to="/login" replace />
   if (!user.mustChangePassword) return <Navigate to="/" replace />
   return <Outlet />
+}
+
+function RequireModule({ module, children }: { module: ModuleId; children: ReactNode }) {
+  const { user } = useAuth()
+  if (!user) return null
+  if (!canUse(user.modules, module, user.role)) {
+    return <Navigate to={firstAllowedPath(user.modules, user.role)} replace />
+  }
+  return children
 }
 
 function PublicOnly() {
@@ -68,20 +79,20 @@ export default function App() {
             </Route>
             <Route element={<RequireAuth />}>
               <Route element={<Shell />}>
-                <Route index element={<Home />} />
-                <Route path="transactions" element={<Transactions />} />
-                <Route path="investments" element={<Investments />} />
+                <Route index element={<RequireModule module="transactions"><Home /></RequireModule>} />
+                <Route path="transactions" element={<RequireModule module="transactions"><Transactions /></RequireModule>} />
+                <Route path="investments" element={<RequireModule module="investments"><Investments /></RequireModule>} />
                 <Route path="more" element={<More />} />
                 <Route path="settings" element={<Settings />} />
-                <Route path="accounts" element={<Accounts />} />
-                <Route path="categories" element={<Categories />} />
-                <Route path="budgets" element={<Budgets />} />
-                <Route path="goals" element={<Goals />} />
-                <Route path="recurring" element={<Recurring />} />
-                <Route path="reports" element={<Reports />} />
+                <Route path="accounts" element={<RequireModule module="transactions"><Accounts /></RequireModule>} />
+                <Route path="categories" element={<RequireModule module="transactions"><Categories /></RequireModule>} />
+                <Route path="budgets" element={<RequireModule module="budgets"><Budgets /></RequireModule>} />
+                <Route path="goals" element={<RequireModule module="goals"><Goals /></RequireModule>} />
+                <Route path="recurring" element={<RequireModule module="recurring"><Recurring /></RequireModule>} />
+                <Route path="reports" element={<RequireModule module="reports"><Reports /></RequireModule>} />
                 <Route path="admin" element={<Admin />} />
               </Route>
-              <Route path="add" element={<AddTransaction />} />
+              <Route path="add" element={<RequireModule module="transactions"><AddTransaction /></RequireModule>} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
