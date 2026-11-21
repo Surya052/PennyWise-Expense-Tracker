@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "dev": "nest start --watch",
-    "build": "prisma generate && nest build",
+    "build": "npm run build --prefix ../web && prisma generate && nest build",
     "postinstall": "prisma generate",
     "start": "node dist/main.js",
     "prisma:generate": "prisma generate",
