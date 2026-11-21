@@ -34,19 +34,19 @@ export function Shell() {
 
   return (
     <div className="flex min-h-dvh bg-[var(--bg)]">
-      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface)] p-4 md:flex">
-        <div className="mb-6 px-2">
+      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col overflow-hidden border-r border-[var(--border)] bg-[var(--surface)] p-4 md:flex">
+        <div className="mb-4 shrink-0 px-2">
           <p className="text-lg font-semibold text-[var(--text)]">PennyWise</p>
           <p className="text-sm text-[var(--muted)]">Every rupee, calmly</p>
         </div>
-        <nav className="flex flex-1 flex-col gap-1">
+        <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-contain pr-1">
           {sidebar.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               end={item.to === '/'}
               className={({ isActive }: { isActive: boolean }) =>
-                `min-h-11 rounded-xl px-3 py-2 text-sm transition ${linkClass(isActive)}`
+                `min-h-11 shrink-0 rounded-xl px-3 py-2 text-sm transition ${linkClass(isActive)}`
               }
             >
               {item.label}
@@ -55,12 +55,12 @@ export function Shell() {
         </nav>
         <NavLink
           to="/add"
-          className="mt-4 flex min-h-11 items-center justify-center rounded-2xl bg-[var(--btn)] text-sm font-semibold text-[var(--surface)]"
+          className="mt-3 flex min-h-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--btn)] text-sm font-semibold text-[var(--surface)]"
         >
           Add transaction
         </NavLink>
       </aside>
-      <div className="flex min-h-dvh flex-1 flex-col">
+      <div className="flex min-h-dvh min-w-0 flex-1 flex-col">
         <main className={`mx-auto w-full max-w-3xl flex-1 px-4 pb-28 pt-4 safe-top md:pb-8 md:pt-8 ${hideNav ? 'pb-8' : ''}`}>
           <Outlet />
         </main>
@@ -87,13 +87,13 @@ export function Shell() {
                       to={item.to}
                       end={item.to === '/'}
                       className={({ isActive }: { isActive: boolean }) =>
-                        `flex min-h-[52px] w-full flex-col items-center justify-center gap-0.5 text-xs ${linkClass(isActive)}`
+                        `flex min-h-[52px] w-full flex-col items-center justify-center gap-0.5 px-0.5 text-[11px] leading-tight ${linkClass(isActive)}`
                       }
                     >
                       <span className="text-lg leading-none" aria-hidden>
                         {item.icon}
                       </span>
-                      {item.label}
+                      <span className="max-w-full truncate">{item.label}</span>
                     </NavLink>
                   </li>
                 ),

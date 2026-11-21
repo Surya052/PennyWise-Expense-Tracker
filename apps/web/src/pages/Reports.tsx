@@ -129,6 +129,9 @@ export function Reports() {
         <button type="button" onClick={() => download(`/reports/export.csv?${exportQuery}`, 'pennywise.csv')} className="min-h-11 rounded-2xl border border-[var(--border)] px-4 text-sm text-[var(--primary)]">
           Export CSV
         </button>
+        <button type="button" onClick={() => download(`/reports/export.xlsx?${exportQuery}`, 'pennywise.xlsx')} className="min-h-11 rounded-2xl border border-[var(--border)] px-4 text-sm text-[var(--primary)]">
+          Export Excel
+        </button>
         <button type="button" onClick={() => download(`/reports/export.pdf?${exportQuery}`, 'pennywise.pdf')} className="min-h-11 rounded-2xl border border-[var(--border)] px-4 text-sm text-[var(--primary)]">
           Export PDF
         </button>

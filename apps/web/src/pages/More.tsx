@@ -10,7 +10,7 @@ const links = [
   { to: '/budgets', label: 'Budgets', desc: 'Monthly limits' },
   { to: '/goals', label: 'Goals', desc: 'Savings targets' },
   { to: '/recurring', label: 'Recurring', desc: 'Rent, salary, SIP' },
-  { to: '/reports', label: 'Reports', desc: 'CSV, PDF, import' },
+  { to: '/reports', label: 'Reports', desc: 'Excel, CSV, PDF, import' },
 ]
 
 export function More() {

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import ExcelJS from 'exceljs';
 import PDFDocument from 'pdfkit';
 import { User } from '@prisma/client';
 import { PrismaService } from './prisma.service';
@@ -110,6 +111,42 @@ export class ReportService {
       row.paymentMethod,
     ]);
     return toCsv([header, ...body]);
+  }
+
+  async xlsx(user: User, query: Record<string, string | undefined>) {
+    const rows = await this.rowsForExport(user, query);
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Transactions');
+    sheet.columns = [
+      { header: 'Date', key: 'date', width: 14 },
+      { header: 'Type', key: 'type', width: 12 },
+      { header: 'Action', key: 'action', width: 12 },
+      { header: 'Amount', key: 'amount', width: 14 },
+      { header: 'Account', key: 'account', width: 20 },
+      { header: 'To account', key: 'toAccount', width: 20 },
+      { header: 'Category', key: 'category', width: 18 },
+      { header: 'Note', key: 'note', width: 28 },
+      { header: 'Tags', key: 'tags', width: 20 },
+      { header: 'Payment method', key: 'paymentMethod', width: 18 },
+    ];
+    for (const row of rows) {
+      sheet.addRow({
+        date: row.date,
+        type: row.type,
+        action: row.action ?? '',
+        amount: Number(row.amount) / 100,
+        account: row.account.name,
+        toAccount: row.toAccount?.name ?? '',
+        category: row.category?.name ?? '',
+        note: row.note,
+        tags: row.tags.map((link) => link.tag.name).join('|'),
+        paymentMethod: row.paymentMethod,
+      });
+    }
+    sheet.getRow(1).font = { bold: true };
+    sheet.getColumn('amount').numFmt = '#,##0.00';
+    const buffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(buffer);
   }
 
   async pdf(user: User, query: Record<string, string | undefined>): Promise<Buffer> {

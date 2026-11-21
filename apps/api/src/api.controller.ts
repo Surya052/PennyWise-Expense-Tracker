@@ -318,6 +318,15 @@ export class ApiController {
   }
 
   @UseGuards(AuthGuard)
+  @Get('reports/export.xlsx')
+  async exportXlsx(@SessionUser() user: User, @Query() query: Record<string, string | undefined>, @Res() res: Response) {
+    const xlsx = await this.reports.xlsx(user, query);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="pennywise.xlsx"');
+    res.send(xlsx);
+  }
+
+  @UseGuards(AuthGuard)
   @Get('reports/export.pdf')
   async exportPdf(@SessionUser() user: User, @Query() query: Record<string, string | undefined>, @Res() res: Response) {
     const pdf = await this.reports.pdf(user, query);
