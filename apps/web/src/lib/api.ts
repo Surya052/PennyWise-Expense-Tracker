@@ -79,5 +79,7 @@ function bump(delta: number) {
 export function subscribeBusy(listener: (count: number) => void) {
   listeners.add(listener)
   listener(busy)
-  return () => listeners.delete(listener)
+  return () => {
+    listeners.delete(listener)
+  }
 }
