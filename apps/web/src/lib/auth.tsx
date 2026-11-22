@@ -5,7 +5,7 @@ export type PublicUser = {
   id: string
   name: string
   email: string
-  role: 'admin' | 'user'
+  role: 'super_admin' | 'admin' | 'user'
   mustChangePassword: boolean
   currency: string
   dateFormat: string

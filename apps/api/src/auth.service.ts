@@ -7,6 +7,7 @@ import { BooksService } from './books.service';
 import { assertPassword, clearRateLimit, randomToken, rateLimit, sha256 } from './common/password';
 import { fail } from './common/money';
 import { userModules } from './common/modules';
+import { isStaff } from './common/roles';
 
 const COOKIE = 'pw_session';
 
@@ -220,7 +221,9 @@ export function normalizeEmail(value: unknown): string {
 }
 
 export async function assertNotLastAdmin(prisma: PrismaService, user: User) {
-  if (user.role !== 'admin' || !user.isActive) return;
-  const others = await prisma.user.count({ where: { role: 'admin', isActive: true, NOT: { id: user.id } } });
+  if (!isStaff(user.role) || !user.isActive) return;
+  const others = await prisma.user.count({
+    where: { role: { in: ['admin', 'super_admin'] }, isActive: true, NOT: { id: user.id } },
+  });
   if (others < 1) fail('Keep at least one active admin');
 }

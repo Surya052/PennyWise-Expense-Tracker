@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom'
 import { apiFetch } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useToast } from '../lib/toast'
-import { formatDate } from '../lib/money'
+import { formatDate, paiseToRupeeInput, rupeeAmount } from '../lib/money'
+import { isPending } from '../lib/pending'
 import { Amount } from '../components/Amount'
 import { Card } from '../components/Card'
 import { Skeleton } from '../components/Skeleton'
@@ -11,11 +12,17 @@ import { Skeleton } from '../components/Skeleton'
 type Tx = {
   id: string
   type: string
+  action: string | null
   amount: string
+  units: string
   date: string
   note: string
-  category: { name: string; color: string } | null
-  account: { name: string }
+  paymentMethod: string
+  tags: string[]
+  category: { id: string; name: string; color: string } | null
+  account: { id: string; name: string }
+  toAccount: { id: string; name: string } | null
+  holding: { id: string; name: string } | null
 }
 
 type ListResponse = {
@@ -35,6 +42,12 @@ export function Transactions() {
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [openId, setOpenId] = useState<string | null>(null)
+  const [editing, setEditing] = useState<Tx | null>(null)
+  const [editAmount, setEditAmount] = useState('')
+  const [editDate, setEditDate] = useState('')
+  const [editNote, setEditNote] = useState('')
+  const [editError, setEditError] = useState('')
+  const isAdmin = true
 
   const load = useCallback(() => {
     setLoading(true)
@@ -63,8 +76,53 @@ export function Transactions() {
     return [...map.entries()]
   }, [rows])
 
+  function startEdit(tx: Tx) {
+    setEditing(tx)
+    setEditAmount(paiseToRupeeInput(tx.amount))
+    setEditDate(tx.date.slice(0, 10))
+    setEditNote(tx.note)
+    setEditError('')
+    setOpenId(null)
+  }
+
+  async function saveEdit() {
+    if (!editing) return
+    setEditError('')
+    const body: Record<string, unknown> = {
+      type: editing.type,
+      amount: rupeeAmount(editAmount),
+      date: editDate,
+      accountId: editing.account.id,
+      note: editNote,
+      paymentMethod: editing.paymentMethod,
+      tags: editing.tags,
+    }
+    if (editing.category) body.categoryId = editing.category.id
+    if (editing.toAccount) body.toAccountId = editing.toAccount.id
+    if (editing.holding) {
+      body.holdingId = editing.holding.id
+      body.action = editing.action || 'buy'
+      body.units = editing.units || '1'
+    }
+    try {
+      const result = await apiFetch(`/transactions/${editing.id}`, { method: 'PATCH', body: JSON.stringify(body) })
+      setEditing(null)
+      if (isPending(result)) toast.show('Waiting for admin approval')
+      else {
+        toast.show('Transaction updated')
+        load()
+      }
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : 'Could not update')
+    }
+  }
+
   async function remove(id: string) {
-    await apiFetch(`/transactions/${id}`, { method: 'DELETE' })
+    const result = await apiFetch(`/transactions/${id}`, { method: 'DELETE' })
+    if (isPending(result)) {
+      toast.show('Waiting for admin approval')
+      return
+    }
     setRows((prev) => prev.filter((r) => r.id !== id))
     toast.show('Transaction deleted', () => {
       void apiFetch(`/transactions/${id}/restore`, { method: 'POST' }).then(load)
@@ -129,6 +187,7 @@ export function Transactions() {
                     onOpen={() => setOpenId(tx.id)}
                     onClose={() => setOpenId(null)}
                     onDelete={() => remove(tx.id)}
+                    onEdit={() => startEdit(tx)}
                   >
                     <Card className="p-3">
                       <div className="flex items-center justify-between gap-3">
@@ -138,6 +197,27 @@ export function Transactions() {
                         </div>
                         <Amount paise={tx.amount} type={tx.type as 'expense'} showSign />
                       </div>
+                      {isAdmin ? (
+                        <div className="mt-3 flex gap-2">
+                          <button type="button" onClick={() => startEdit(tx)} className="min-h-10 rounded-xl border border-[var(--border)] px-3 text-sm">
+                            Edit
+                          </button>
+                          <button type="button" onClick={() => void remove(tx.id)} className="min-h-10 rounded-xl border border-[var(--expense)] px-3 text-sm text-[var(--expense)]">
+                            Delete
+                          </button>
+                        </div>
+                      ) : null}
+                      {editing?.id === tx.id ? (
+                        <div className="mt-3 flex flex-col gap-2">
+                          <input value={editAmount} onChange={(e) => setEditAmount(e.target.value)} inputMode="decimal" className="min-h-11 rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3" aria-label="Amount in rupees" />
+                          <input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} className="min-h-11 rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3" />
+                          <input value={editNote} onChange={(e) => setEditNote(e.target.value)} className="min-h-11 rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3" aria-label="Note" />
+                          {editError ? <p className="text-sm text-[var(--expense)]">{editError}</p> : null}
+                          <button type="button" onClick={() => void saveEdit()} className="min-h-11 rounded-2xl bg-[var(--btn)] text-sm font-semibold text-[var(--surface)]">
+                            Save
+                          </button>
+                        </div>
+                      ) : null}
                     </Card>
                   </SwipeRow>
                 ))}
@@ -183,12 +263,14 @@ function SwipeRow({
   onOpen,
   onClose,
   onDelete,
+  onEdit,
 }: {
   children: ReactNode
   open: boolean
   onOpen: () => void
   onClose: () => void
   onDelete: () => void
+  onEdit: () => void
 }) {
   let startX = 0
   return (
@@ -206,13 +288,16 @@ function SwipeRow({
       <div
         className={`absolute inset-y-0 right-0 flex items-stretch transition ${open ? 'translate-x-0' : 'translate-x-full'}`}
       >
-        <Link
-          to="/add"
+        <button
+          type="button"
           className="flex min-w-[4.5rem] items-center justify-center bg-[var(--primary)] text-sm font-medium text-[var(--surface)]"
-          onClick={onClose}
+          onClick={() => {
+            onEdit()
+            onClose()
+          }}
         >
           Edit
-        </Link>
+        </button>
         <button
           type="button"
           className="flex min-w-[4.5rem] items-center justify-center bg-[var(--expense)] text-sm font-medium text-[var(--surface)]"

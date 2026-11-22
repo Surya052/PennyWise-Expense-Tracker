@@ -7,6 +7,7 @@ import { PrismaService } from './prisma.service';
 import { CacheService } from './cache.service';
 import { AuthService } from './auth.service';
 import { AdminService } from './admin.service';
+import { ApprovalService } from './approval.service';
 import { BooksService } from './books.service';
 import { ReportService } from './report.service';
 import { PlanService } from './plan.service';
@@ -31,6 +32,7 @@ const staticModules = existsSync(webDist)
     CacheService,
     AuthService,
     AdminService,
+    ApprovalService,
     BooksService,
     ReportService,
     PlanService,

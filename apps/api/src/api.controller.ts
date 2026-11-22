@@ -19,6 +19,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { Request, Response } from 'express';
 import { AuthService, publicUser } from './auth.service';
 import { AdminService } from './admin.service';
+import { ApprovalService } from './approval.service';
 import { BooksService } from './books.service';
 import { ReportService } from './report.service';
 import { PlanService } from './plan.service';
@@ -28,12 +29,14 @@ import { SessionUser, clientIp } from './session.decorator';
 import { User } from '@prisma/client';
 import { sha256 } from './common/password';
 import { fail } from './common/money';
+import { APP_VERSION } from './version';
 
 @Controller()
 export class ApiController {
   constructor(
     private auth: AuthService,
     private admin: AdminService,
+    private approval: ApprovalService,
     private books: BooksService,
     private reports: ReportService,
     private plans: PlanService,
@@ -42,7 +45,7 @@ export class ApiController {
 
   @Get('health')
   health() {
-    return { ok: true, name: 'PennyWise' };
+    return { ok: true, name: 'PennyWise', version: APP_VERSION };
   }
 
   @Post('auth/login')
@@ -157,9 +160,33 @@ export class ApiController {
   }
 
   @UseGuards(AuthGuard)
+  @Get('requests')
+  listRequests(@SessionUser() user: User) {
+    return this.approval.list(user);
+  }
+
+  @UseGuards(AuthGuard, AdminGuard)
+  @Post('requests/:id/approve')
+  approveRequest(@SessionUser() user: User, @Param('id') id: string) {
+    return this.approval.decide(user, id, 'approved');
+  }
+
+  @UseGuards(AuthGuard, AdminGuard)
+  @Post('requests/:id/reject')
+  rejectRequest(@SessionUser() user: User, @Param('id') id: string) {
+    return this.approval.decide(user, id, 'rejected');
+  }
+
+  @UseGuards(AuthGuard, AdminGuard)
+  @Get('admin/users/:id/books')
+  userBooks(@SessionUser() user: User, @Param('id') id: string) {
+    return this.approval.snapshot(user, id);
+  }
+
+  @UseGuards(AuthGuard)
   @Get('accounts')
-  listAccounts(@SessionUser() user: User) {
-    return this.books.listAccounts(user.id);
+  async listAccounts(@SessionUser() user: User, @Query('ownerId') ownerId?: string) {
+    return this.books.listAccounts(await this.approval.ownerFor(user, ownerId));
   }
 
   @UseGuards(AuthGuard)
@@ -170,20 +197,20 @@ export class ApiController {
 
   @UseGuards(AuthGuard)
   @Patch('accounts/:id')
-  updateAccount(@SessionUser() user: User, @Param('id') id: string, @Body() body: Record<string, unknown>) {
-    return this.books.updateAccount(user.id, id, body);
+  updateAccount(@SessionUser() user: User, @Param('id') id: string, @Body() body: Record<string, unknown>, @Query('ownerId') ownerId?: string) {
+    return this.approval.gate(user, ownerId, { entity: 'account', entityId: id, action: 'update', payload: body, summary: `Edit account ${textOf(body.name)}` }, (owner) => this.books.updateAccount(owner, id, body));
   }
 
   @UseGuards(AuthGuard)
   @Delete('accounts/:id')
-  deleteAccountRow(@SessionUser() user: User, @Param('id') id: string) {
-    return this.books.deleteAccount(user.id, id);
+  deleteAccountRow(@SessionUser() user: User, @Param('id') id: string, @Query('ownerId') ownerId?: string) {
+    return this.approval.gate(user, ownerId, { entity: 'account', entityId: id, action: 'delete', payload: {}, summary: 'Delete account' }, (owner) => this.books.deleteAccount(owner, id));
   }
 
   @UseGuards(AuthGuard)
   @Get('categories')
-  listCategories(@SessionUser() user: User) {
-    return this.books.listCategories(user.id);
+  async listCategories(@SessionUser() user: User, @Query('ownerId') ownerId?: string) {
+    return this.books.listCategories(await this.approval.ownerFor(user, ownerId));
   }
 
   @UseGuards(AuthGuard)
@@ -194,8 +221,14 @@ export class ApiController {
 
   @UseGuards(AuthGuard)
   @Patch('categories/:id')
-  updateCategory(@SessionUser() user: User, @Param('id') id: string, @Body() body: Record<string, unknown>) {
-    return this.books.updateCategory(user.id, id, body);
+  updateCategory(@SessionUser() user: User, @Param('id') id: string, @Body() body: Record<string, unknown>, @Query('ownerId') ownerId?: string) {
+    return this.approval.gate(user, ownerId, { entity: 'category', entityId: id, action: 'update', payload: body, summary: `Edit category ${textOf(body.name)}` }, (owner) => this.books.updateCategory(owner, id, body));
+  }
+
+  @UseGuards(AuthGuard)
+  @Delete('categories/:id')
+  deleteCategory(@SessionUser() user: User, @Param('id') id: string, @Query('ownerId') ownerId?: string) {
+    return this.approval.gate(user, ownerId, { entity: 'category', entityId: id, action: 'delete', payload: {}, summary: 'Delete category' }, (owner) => this.books.deleteCategory(owner, id));
   }
 
   @UseGuards(AuthGuard)
@@ -206,8 +239,10 @@ export class ApiController {
 
   @UseGuards(AuthGuard)
   @Get('transactions')
-  listTransactions(@SessionUser() user: User, @Query() query: Record<string, string | undefined>) {
-    return this.books.listTransactions(user.id, query);
+  async listTransactions(@SessionUser() user: User, @Query() query: Record<string, string | undefined>) {
+    const owner = await this.approval.ownerFor(user, query.ownerId);
+    const { ownerId: _owner, ...rest } = query;
+    return this.books.listTransactions(owner, rest);
   }
 
   @UseGuards(AuthGuard)
@@ -224,14 +259,14 @@ export class ApiController {
 
   @UseGuards(AuthGuard)
   @Patch('transactions/:id')
-  updateTransaction(@SessionUser() user: User, @Param('id') id: string, @Body() body: Record<string, unknown>) {
-    return this.books.updateTransaction(user.id, id, body as never);
+  updateTransaction(@SessionUser() user: User, @Param('id') id: string, @Body() body: Record<string, unknown>, @Query('ownerId') ownerId?: string) {
+    return this.approval.gate(user, ownerId, { entity: 'transaction', entityId: id, action: 'update', payload: body, summary: `Edit transaction ${textOf(body.amount)}` }, (owner) => this.books.updateTransaction(owner, id, body as never));
   }
 
   @UseGuards(AuthGuard)
   @Delete('transactions/:id')
-  deleteTransaction(@SessionUser() user: User, @Param('id') id: string) {
-    return this.books.deleteTransaction(user.id, id);
+  deleteTransaction(@SessionUser() user: User, @Param('id') id: string, @Query('ownerId') ownerId?: string) {
+    return this.approval.gate(user, ownerId, { entity: 'transaction', entityId: id, action: 'delete', payload: {}, summary: 'Delete transaction' }, (owner) => this.books.deleteTransaction(owner, id));
   }
 
   @UseGuards(AuthGuard)
@@ -268,8 +303,8 @@ export class ApiController {
 
   @UseGuards(AuthGuard)
   @Get('holdings')
-  listHoldings(@SessionUser() user: User) {
-    return this.books.listHoldings(user.id);
+  async listHoldings(@SessionUser() user: User, @Query('ownerId') ownerId?: string) {
+    return this.books.listHoldings(await this.approval.ownerFor(user, ownerId));
   }
 
   @UseGuards(AuthGuard)
@@ -280,20 +315,20 @@ export class ApiController {
 
   @UseGuards(AuthGuard)
   @Patch('holdings/:id')
-  updateHolding(@SessionUser() user: User, @Param('id') id: string, @Body() body: Record<string, unknown>) {
-    return this.books.updateHolding(user.id, id, body);
+  updateHolding(@SessionUser() user: User, @Param('id') id: string, @Body() body: Record<string, unknown>, @Query('ownerId') ownerId?: string) {
+    return this.approval.gate(user, ownerId, { entity: 'holding', entityId: id, action: 'update', payload: body, summary: `Edit holding ${textOf(body.name)}` }, (owner) => this.books.updateHolding(owner, id, body));
   }
 
   @UseGuards(AuthGuard)
   @Post('holdings/:id/value')
-  setHoldingValue(@SessionUser() user: User, @Param('id') id: string, @Body() body: Record<string, unknown>) {
-    return this.books.setHoldingValue(user.id, id, body);
+  setHoldingValue(@SessionUser() user: User, @Param('id') id: string, @Body() body: Record<string, unknown>, @Query('ownerId') ownerId?: string) {
+    return this.approval.gate(user, ownerId, { entity: 'holdingValue', entityId: id, action: 'update', payload: body, summary: `Update holding value ${textOf(body.currentValue)}` }, (owner) => this.books.setHoldingValue(owner, id, body));
   }
 
   @UseGuards(AuthGuard)
   @Delete('holdings/:id')
-  deleteHolding(@SessionUser() user: User, @Param('id') id: string) {
-    return this.books.deleteHolding(user.id, id);
+  deleteHolding(@SessionUser() user: User, @Param('id') id: string, @Query('ownerId') ownerId?: string) {
+    return this.approval.gate(user, ownerId, { entity: 'holding', entityId: id, action: 'delete', payload: {}, summary: 'Delete holding' }, (owner) => this.books.deleteHolding(owner, id));
   }
 
   @UseGuards(AuthGuard)
@@ -349,26 +384,26 @@ export class ApiController {
 
   @UseGuards(AuthGuard)
   @Get('budgets')
-  listBudgets(@SessionUser() user: User, @Query('month') month: string) {
-    return this.plans.listBudgets(user.id, month);
+  async listBudgets(@SessionUser() user: User, @Query('month') month: string, @Query('ownerId') ownerId?: string) {
+    return this.plans.listBudgets(await this.approval.ownerFor(user, ownerId), month);
   }
 
   @UseGuards(AuthGuard)
   @Post('budgets')
-  saveBudget(@SessionUser() user: User, @Body() body: Record<string, unknown>) {
-    return this.plans.saveBudget(user.id, body);
+  saveBudget(@SessionUser() user: User, @Body() body: Record<string, unknown>, @Query('ownerId') ownerId?: string) {
+    return this.approval.gate(user, ownerId, { entity: 'budget', entityId: String(body.categoryId ?? 'budget'), action: 'update', payload: body, summary: `Edit budget ${textOf(body.amount)}` }, (owner) => this.plans.saveBudget(owner, body));
   }
 
   @UseGuards(AuthGuard)
   @Delete('budgets/:id')
-  deleteBudget(@SessionUser() user: User, @Param('id') id: string) {
-    return this.plans.deleteBudget(user.id, id);
+  deleteBudget(@SessionUser() user: User, @Param('id') id: string, @Query('ownerId') ownerId?: string) {
+    return this.approval.gate(user, ownerId, { entity: 'budget', entityId: id, action: 'delete', payload: {}, summary: 'Delete budget' }, (owner) => this.plans.deleteBudget(owner, id));
   }
 
   @UseGuards(AuthGuard)
   @Get('goals')
-  listGoals(@SessionUser() user: User) {
-    return this.plans.listGoals(user.id);
+  async listGoals(@SessionUser() user: User, @Query('ownerId') ownerId?: string) {
+    return this.plans.listGoals(await this.approval.ownerFor(user, ownerId));
   }
 
   @UseGuards(AuthGuard)
@@ -379,20 +414,20 @@ export class ApiController {
 
   @UseGuards(AuthGuard)
   @Patch('goals/:id')
-  updateGoal(@SessionUser() user: User, @Param('id') id: string, @Body() body: Record<string, unknown>) {
-    return this.plans.saveGoal(user.id, body, id);
+  updateGoal(@SessionUser() user: User, @Param('id') id: string, @Body() body: Record<string, unknown>, @Query('ownerId') ownerId?: string) {
+    return this.approval.gate(user, ownerId, { entity: 'goal', entityId: id, action: 'update', payload: body, summary: `Edit goal ${textOf(body.name)}` }, (owner) => this.plans.saveGoal(owner, body, id));
   }
 
   @UseGuards(AuthGuard)
   @Delete('goals/:id')
-  deleteGoal(@SessionUser() user: User, @Param('id') id: string) {
-    return this.plans.deleteGoal(user.id, id);
+  deleteGoal(@SessionUser() user: User, @Param('id') id: string, @Query('ownerId') ownerId?: string) {
+    return this.approval.gate(user, ownerId, { entity: 'goal', entityId: id, action: 'delete', payload: {}, summary: 'Delete goal' }, (owner) => this.plans.deleteGoal(owner, id));
   }
 
   @UseGuards(AuthGuard)
   @Get('recurring')
-  listRecurring(@SessionUser() user: User) {
-    return this.plans.listRecurring(user.id);
+  async listRecurring(@SessionUser() user: User, @Query('ownerId') ownerId?: string) {
+    return this.plans.listRecurring(await this.approval.ownerFor(user, ownerId));
   }
 
   @UseGuards(AuthGuard)
@@ -403,14 +438,14 @@ export class ApiController {
 
   @UseGuards(AuthGuard)
   @Patch('recurring/:id')
-  updateRecurring(@SessionUser() user: User, @Param('id') id: string, @Body() body: Record<string, unknown>) {
-    return this.plans.saveRecurring(user.id, body, id);
+  updateRecurring(@SessionUser() user: User, @Param('id') id: string, @Body() body: Record<string, unknown>, @Query('ownerId') ownerId?: string) {
+    return this.approval.gate(user, ownerId, { entity: 'recurring', entityId: id, action: 'update', payload: body, summary: `Edit recurring ${textOf(body.amount)}` }, (owner) => this.plans.saveRecurring(owner, body, id));
   }
 
   @UseGuards(AuthGuard)
   @Delete('recurring/:id')
-  deleteRecurring(@SessionUser() user: User, @Param('id') id: string) {
-    return this.plans.deleteRecurring(user.id, id);
+  deleteRecurring(@SessionUser() user: User, @Param('id') id: string, @Query('ownerId') ownerId?: string) {
+    return this.approval.gate(user, ownerId, { entity: 'recurring', entityId: id, action: 'delete', payload: {}, summary: 'Delete recurring' }, (owner) => this.plans.deleteRecurring(owner, id));
   }
 
   @Post('cron/recurring')
@@ -429,4 +464,8 @@ export class ApiController {
     }
     return session.user;
   }
+}
+
+function textOf(value: unknown) {
+  return String(value ?? '').trim().slice(0, 40);
 }

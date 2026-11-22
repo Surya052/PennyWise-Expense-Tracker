@@ -1,4 +1,5 @@
 import { fail } from './money';
+import { isStaff } from './roles';
 
 export const MODULES = ['transactions', 'investments', 'budgets', 'goals', 'recurring', 'reports'] as const;
 
@@ -9,13 +10,13 @@ export function allModules(): AppModuleName[] {
 }
 
 export function userModules(user: { role: string; modules?: string[] | null }): AppModuleName[] {
-  if (user.role === 'admin') return allModules();
+  if (isStaff(user.role)) return allModules();
   const granted = new Set(user.modules ?? []);
   return MODULES.filter((name) => granted.has(name));
 }
 
 export function normalizeModules(value: unknown, role: string): AppModuleName[] {
-  if (role === 'admin') return allModules();
+  if (isStaff(role)) return allModules();
   const raw = Array.isArray(value) ? value.map((item) => String(item)) : [];
   const picked = MODULES.filter((name) => raw.includes(name));
   if (picked.length === 0) fail('Enable at least one module');

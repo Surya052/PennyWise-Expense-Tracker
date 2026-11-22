@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { apiFetch, ApiError } from '../lib/api'
-import { rupeesKeypadToPaise } from '../lib/money'
+import { rupeeAmount } from '../lib/money'
 import { useToast } from '../lib/toast'
 import { Card } from '../components/Card'
 
@@ -63,7 +63,7 @@ export function AddTransaction() {
     try {
       const body: Record<string, unknown> = {
         type,
-        amount: rupeesKeypadToPaise(display),
+        amount: rupeeAmount(display),
         date,
         accountId,
         note,

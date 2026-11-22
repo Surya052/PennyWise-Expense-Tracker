@@ -1,10 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import { apiFetch, ApiError } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { Card } from '../components/Card'
 import { Skeleton } from '../components/Skeleton'
 import { MODULES } from '../lib/modules'
+import { isStaff, isSuper } from '../lib/version'
 
 type Stats = { total: number; active: number; newThisMonth: number }
 
@@ -43,8 +44,8 @@ export function Admin() {
   const [role, setRole] = useState<'user' | 'admin'>('user')
   const [modules, setModules] = useState<string[]>(MODULES.map((item) => item.id))
   const [error, setError] = useState('')
-
-  if (user?.role !== 'admin') return <Navigate to="/" replace />
+  const staff = isStaff(user?.role)
+  const superAdmin = isSuper(user?.role)
 
   function load() {
     setLoading(true)
@@ -62,9 +63,11 @@ export function Admin() {
   }
 
   useEffect(() => {
-    if (user?.role !== 'admin') return
+    if (!staff) return
     load()
-  }, [q, user?.role])
+  }, [q, staff])
+
+  if (!staff) return <Navigate to="/" replace />
 
   async function createUser(e: FormEvent) {
     e.preventDefault()
@@ -98,7 +101,7 @@ export function Admin() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-xl font-semibold">Admin</h1>
+      <h1 className="text-xl font-semibold">{superAdmin ? 'Super admin' : 'Admin'}</h1>
       {loading || !stats ? (
         <Skeleton className="h-24" />
       ) : (
@@ -112,7 +115,7 @@ export function Admin() {
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Temporary password" className="min-h-11 rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3" />
           <select value={role} onChange={(e) => setRole(e.target.value as 'user' | 'admin')} className="min-h-11 rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3">
             <option value="user">User</option>
-            <option value="admin">Admin</option>
+            {superAdmin ? <option value="admin">Admin</option> : null}
           </select>
           <ModulePicker value={modules} onChange={setModules} disabled={role === 'admin'} />
           {error ? <p className="text-sm text-[var(--expense)]">{error}</p> : null}
@@ -143,7 +146,18 @@ export function Admin() {
                   </p>
                 </div>
                 <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
-                  <ButtonRow onToggle={() => void toggleActive(u)} onDelete={() => void removeUser(u.id)} active={u.isActive} />
+                  <Link to={`/admin/users/${u.id}`} className="min-h-10 text-sm text-[var(--primary)]">
+                    Open records
+                  </Link>
+                  {u.id === user?.id ? (
+                    <p className="text-xs text-[var(--muted)]">Signed in as this account</p>
+                  ) : u.role === 'super_admin' ? (
+                    <p className="text-xs text-[var(--muted)]">Super admin</p>
+                  ) : superAdmin || u.role === 'user' ? (
+                    <ButtonRow onToggle={() => void toggleActive(u)} onDelete={() => void removeUser(u.id)} active={u.isActive} />
+                  ) : (
+                    <p className="text-xs text-[var(--muted)]">Only a super admin can change this admin</p>
+                  )}
                   <UserAccess
                     user={u}
                     onSave={async (next) => {
@@ -227,7 +241,7 @@ function UserAccess({ user, onSave }: { user: AdminUser; onSave: (modules: strin
   const [open, setOpen] = useState(false)
   const [modules, setModules] = useState(user.modules ?? [])
   const [busy, setBusy] = useState(false)
-  if (user.role === 'admin') return <p className="text-xs text-[var(--muted)]">All modules</p>
+  if (isStaff(user.role)) return <p className="text-xs text-[var(--muted)]">All modules</p>
   return (
     <div className="w-full sm:w-80">
       <button type="button" onClick={() => setOpen((value) => !value)} className="min-h-10 text-sm text-[var(--primary)]">

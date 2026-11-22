@@ -111,6 +111,18 @@ export class BooksService {
     return this.presentCategory(row);
   }
 
+  async deleteCategory(userId: string, id: string) {
+    await this.ownedCategory(this.prisma, userId, id);
+    const [used, children, budgets] = await Promise.all([
+      this.prisma.transaction.count({ where: { userId, categoryId: id, deletedAt: null } }),
+      this.prisma.category.count({ where: { userId, parentId: id } }),
+      this.prisma.budget.count({ where: { userId, categoryId: id } }),
+    ]);
+    if (used || children || budgets) fail('This category is still used. Remove those records first.');
+    await this.prisma.category.delete({ where: { id } });
+    return { ok: true };
+  }
+
   async updateCategory(userId: string, id: string, body: Record<string, unknown>) {
     const existing = await this.ownedCategory(this.prisma, userId, id);
     const data = await this.categoryData(this.prisma, userId, { ...existing, ...body, type: body.type ?? existing.type }, id);
@@ -184,7 +196,7 @@ export class BooksService {
   }
 
   async createTransaction(userId: string, body: TxInput) {
-    const row = await this.prisma.$transaction((db) => this.postTransaction(db, userId, body));
+    const row = await this.prisma.$transaction((db) => this.postTransaction(db, userId, body), { timeout: 20000, maxWait: 10000 });
     this.cache.dropUser(userId);
     return this.presentTx(row);
   }
@@ -195,7 +207,7 @@ export class BooksService {
       const next = await this.postTransaction(db, userId, body, existing.id);
       if (existing.holdingId && existing.holdingId !== next.holdingId) await this.recomputeHolding(db, existing.holdingId);
       return next;
-    });
+    }, { timeout: 20000, maxWait: 10000 });
     this.cache.dropUser(userId);
     return this.presentTx(row);
   }
@@ -205,7 +217,7 @@ export class BooksService {
       const existing = await this.mustTx(db, userId, id);
       await db.transaction.update({ where: { id }, data: { deletedAt: new Date() } });
       if (existing.holdingId) await this.recomputeHolding(db, existing.holdingId);
-    });
+    }, { timeout: 20000, maxWait: 10000 });
     this.cache.dropUser(userId);
     return { ok: true, id };
   }
@@ -217,7 +229,7 @@ export class BooksService {
       await db.transaction.update({ where: { id }, data: { deletedAt: null } });
       if (existing.holdingId) await this.recomputeHolding(db, existing.holdingId);
       return this.mustTx(db, userId, id);
-    });
+    }, { timeout: 20000, maxWait: 10000 });
     this.cache.dropUser(userId);
     return this.presentTx(row);
   }
@@ -500,13 +512,22 @@ export class BooksService {
     const openingBalance = body.openingBalance == null || body.openingBalance === ''
       ? partial ? undefined : 0n
       : parsePaise(body.openingBalance, 'Opening balance');
-    return {
+    const data: Record<string, unknown> = {
       name,
-      type: body.type,
-      openingBalance: openingBalance ?? 0n,
+      type: String(body.type),
       color: cleanColor(body.color) ?? '#5B8DB8',
       icon: cleanText(body.icon, 30) || 'wallet',
       isArchived: Boolean(body.isArchived),
+    };
+    if (openingBalance !== undefined) data.openingBalance = openingBalance;
+    else if (!partial) data.openingBalance = 0n;
+    return data as {
+      name: string;
+      type: string;
+      openingBalance: bigint;
+      color: string;
+      icon: string;
+      isArchived: boolean;
     };
   }
 

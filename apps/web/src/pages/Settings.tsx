@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { apiFetch, ApiError } from '../lib/api'
 import { useAuth, type PublicUser } from '../lib/auth'
 import { Card } from '../components/Card'
+import { APP_VERSION } from '../lib/version'
 
 export function Settings() {
   const { user, setUser, refresh } = useAuth()
@@ -137,6 +138,7 @@ export function Settings() {
           </button>
         </form>
       </Card>
+      <p className="text-center text-xs text-[var(--muted)]">Version {APP_VERSION}</p>
       <button type="button" className="text-sm text-[var(--muted)]" onClick={() => void refresh()}>
         Refresh session
       </button>

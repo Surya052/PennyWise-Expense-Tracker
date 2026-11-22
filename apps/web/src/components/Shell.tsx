@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { canUse, type ModuleId } from '../lib/modules'
+import { APP_VERSION, isStaff } from '../lib/version'
 
 const nav: { to: string; label: string; icon?: string; fab?: boolean; module?: ModuleId }[] = [
   { to: '/', label: 'Home', icon: '⌂', module: 'transactions' },
@@ -36,7 +37,11 @@ export function Shell() {
   const hideNav = location.pathname === '/add'
   const allowed = (module?: ModuleId) => !module || canUse(user?.modules, module, user?.role)
   const mobileNav = nav.filter((item) => allowed(item.module))
-  const desktopNav = sidebar.filter((item) => allowed(item.module))
+  const desktopNav = [
+    ...sidebar.filter((item) => allowed(item.module)),
+    ...(isStaff(user?.role) ? [{ to: '/admin', label: 'Admin' }] : []),
+    { to: '/requests', label: isStaff(user?.role) ? 'Requests' : 'My requests' },
+  ]
 
   return (
     <div className="flex min-h-dvh bg-[var(--bg)]">
@@ -44,6 +49,7 @@ export function Shell() {
         <div className="mb-4 shrink-0 px-2">
           <p className="text-lg font-semibold text-[var(--text)]">PennyWise</p>
           <p className="text-sm text-[var(--muted)]">Every rupee, calmly</p>
+          <p className="text-xs text-[var(--muted)]">Version {APP_VERSION}</p>
         </div>
         <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-contain pr-1">
           {desktopNav.map((item) => (

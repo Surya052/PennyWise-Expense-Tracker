@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { apiFetch, ApiError } from '../lib/api'
-import { currentMonthLabel } from '../lib/money'
+import { currentMonthLabel, paiseToRupeeInput } from '../lib/money'
+import { isPending } from '../lib/pending'
 import { Amount } from '../components/Amount'
 import { Card } from '../components/Card'
 import { MonthPicker } from '../components/MonthPicker'
@@ -46,20 +47,22 @@ export function Budgets() {
     e.preventDefault()
     setError('')
     try {
-      await apiFetch('/budgets', {
+      const result = await apiFetch('/budgets', {
         method: 'POST',
         body: JSON.stringify({ month, categoryId, amount }),
       })
       setAmount('')
-      load()
+      if (isPending(result)) setError('Waiting for admin approval')
+      else load()
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Save failed')
     }
   }
 
   async function remove(id: string) {
-    await apiFetch(`/budgets/${id}`, { method: 'DELETE' })
-    load()
+    const result = await apiFetch(`/budgets/${id}`, { method: 'DELETE' })
+    if (isPending(result)) setError('Waiting for admin approval')
+    else load()
   }
 
   return (
@@ -103,9 +106,21 @@ export function Budgets() {
                   </p>
                   <Amount paise={b.amount} />
                 </div>
-                <button type="button" onClick={() => void remove(b.id)} className="min-h-10 rounded-xl border border-[var(--border)] px-3 text-sm text-[var(--expense)]">
-                  Remove
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCategoryId(b.categoryId)
+                      setAmount(paiseToRupeeInput(b.amount))
+                    }}
+                    className="min-h-10 rounded-xl border border-[var(--border)] px-3 text-sm"
+                  >
+                    Edit
+                  </button>
+                  <button type="button" onClick={() => void remove(b.id)} className="min-h-10 rounded-xl border border-[var(--expense)] px-3 text-sm text-[var(--expense)]">
+                    Delete
+                  </button>
+                </div>
               </Card>
             </li>
           ))}

@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { apiFetch, ApiError } from '../lib/api'
+import { isPending } from '../lib/pending'
 import { Card } from '../components/Card'
 import { Skeleton } from '../components/Skeleton'
 
@@ -12,11 +13,14 @@ type Category = {
 }
 
 export function Categories() {
+  const isAdmin = true
   const [rows, setRows] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
   const [name, setName] = useState('')
   const [type, setType] = useState<'expense' | 'income'>('expense')
   const [error, setError] = useState('')
+  const [editingId, setEditingId] = useState('')
+  const [editName, setEditName] = useState('')
 
   function load() {
     void apiFetch<Category[]>('/categories').then(setRows).finally(() => setLoading(false))
@@ -33,6 +37,29 @@ export function Categories() {
       load()
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not save')
+    }
+  }
+
+  async function saveName(row: Category) {
+    setError('')
+    try {
+      const result = await apiFetch(`/categories/${row.id}`, { method: 'PATCH', body: JSON.stringify({ name: editName, type: row.type, color: row.color }) })
+      setEditingId('')
+      if (isPending(result)) setError('Waiting for admin approval')
+      else load()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not update')
+    }
+  }
+
+  async function remove(id: string) {
+    setError('')
+    try {
+      const result = await apiFetch(`/categories/${id}`, { method: 'DELETE' })
+      if (isPending(result)) setError('Waiting for admin approval')
+      else load()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not delete')
     }
   }
 
@@ -75,8 +102,37 @@ export function Categories() {
         <Skeleton className="h-40" />
       ) : (
         <>
-          <CategoryList title="Expense" items={expense} onReorder={reorder} />
-          <CategoryList title="Income" items={income} onReorder={reorder} />
+          {error ? <p className="text-sm text-[var(--expense)]">{error}</p> : null}
+          <CategoryList
+            title="Expense"
+            items={expense}
+            onReorder={reorder}
+            isAdmin={isAdmin}
+            editingId={editingId}
+            editName={editName}
+            onEditName={setEditName}
+            onStartEdit={(row) => {
+              setEditingId(row.id)
+              setEditName(row.name)
+            }}
+            onSave={saveName}
+            onDelete={remove}
+          />
+          <CategoryList
+            title="Income"
+            items={income}
+            onReorder={reorder}
+            isAdmin={isAdmin}
+            editingId={editingId}
+            editName={editName}
+            onEditName={setEditName}
+            onStartEdit={(row) => {
+              setEditingId(row.id)
+              setEditName(row.name)
+            }}
+            onSave={saveName}
+            onDelete={remove}
+          />
         </>
       )}
     </div>
@@ -87,18 +143,52 @@ function CategoryList({
   title,
   items,
   onReorder,
+  isAdmin,
+  editingId,
+  editName,
+  onEditName,
+  onStartEdit,
+  onSave,
+  onDelete,
 }: {
   title: string
   items: Category[]
   onReorder: (id: string, direction: 'up' | 'down') => void
+  isAdmin: boolean
+  editingId: string
+  editName: string
+  onEditName: (value: string) => void
+  onStartEdit: (row: Category) => void
+  onSave: (row: Category) => void
+  onDelete: (id: string) => void
 }) {
   return (
     <Card>
       <h2 className="mb-3 text-sm font-semibold">{title}</h2>
       <ul className="flex flex-col gap-2">
         {items.map((c, index) => (
-          <li key={c.id} className="flex items-center justify-between gap-2">
-            <span style={{ color: c.color }}>{c.name}</span>
+          <li key={c.id} className="flex flex-wrap items-center justify-between gap-2">
+            {editingId === c.id ? (
+              <input value={editName} onChange={(e) => onEditName(e.target.value)} className="min-h-10 min-w-0 flex-1 rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3" />
+            ) : (
+              <span style={{ color: c.color }}>{c.name}</span>
+            )}
+            {isAdmin ? (
+              <div className="flex gap-2">
+                {editingId === c.id ? (
+                  <button type="button" onClick={() => onSave(c)} className="min-h-10 rounded-xl bg-[var(--btn)] px-3 text-sm text-[var(--surface)]">
+                    Save
+                  </button>
+                ) : (
+                  <button type="button" onClick={() => onStartEdit(c)} className="min-h-10 rounded-xl border border-[var(--border)] px-3 text-sm">
+                    Edit
+                  </button>
+                )}
+                <button type="button" onClick={() => onDelete(c.id)} className="min-h-10 rounded-xl border border-[var(--expense)] px-3 text-sm text-[var(--expense)]">
+                  Delete
+                </button>
+              </div>
+            ) : null}
             <ReorderButtons
               disableUp={index === 0}
               disableDown={index === items.length - 1}

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js'
 import { Doughnut } from 'react-chartjs-2'
 import { apiFetch, ApiError } from '../lib/api'
+import { isPending } from '../lib/pending'
 import { Amount } from '../components/Amount'
 import { BottomSheet } from '../components/BottomSheet'
 import { Card } from '../components/Card'
@@ -26,6 +27,7 @@ type HoldingsResponse = {
 }
 
 export function Investments() {
+  const isAdmin = true
   const [data, setData] = useState<HoldingsResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [picker, setPicker] = useState<Holding | null>(null)
@@ -33,6 +35,8 @@ export function Investments() {
   const [error, setError] = useState('')
   const [newName, setNewName] = useState('')
   const [creating, setCreating] = useState(false)
+  const [editingId, setEditingId] = useState('')
+  const [editName, setEditName] = useState('')
 
   function load() {
     setLoading(true)
@@ -71,17 +75,44 @@ export function Investments() {
     }
   }
 
+  async function saveName(h: Holding) {
+    setError('')
+    try {
+      const result = await apiFetch(`/holdings/${h.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name: editName, assetType: h.assetType, symbol: h.symbol }),
+      })
+      setEditingId('')
+      if (isPending(result)) setError('Waiting for admin approval')
+      else load()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not update')
+    }
+  }
+
+  async function removeHolding(id: string) {
+    setError('')
+    try {
+      const result = await apiFetch(`/holdings/${id}`, { method: 'DELETE' })
+      if (isPending(result)) setError('Waiting for admin approval')
+      else load()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not delete')
+    }
+  }
+
   async function saveValue() {
     if (!picker) return
     setError('')
     try {
-      await apiFetch(`/holdings/${picker.id}/value`, {
+      const result = await apiFetch(`/holdings/${picker.id}/value`, {
         method: 'POST',
         body: JSON.stringify({ currentValue: valueInput }),
       })
       setPicker(null)
       setValueInput('')
-      load()
+      if (isPending(result)) setError('Waiting for admin approval')
+      else load()
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Update failed')
     }
@@ -113,7 +144,17 @@ export function Investments() {
           {data.holdings.map((h) => (
             <li key={h.id}>
               <Card className="p-3">
-                <HoldingRow h={h} onSetValue={() => { setPicker(h); setValueInput(''); setError('') }} />
+                <HoldingRow
+                  h={h}
+                  isAdmin={isAdmin}
+                  editing={editingId === h.id}
+                  editName={editName}
+                  onEditName={setEditName}
+                  onStartEdit={() => { setEditingId(h.id); setEditName(h.name); setError('') }}
+                  onSave={() => void saveName(h)}
+                  onDelete={() => void removeHolding(h.id)}
+                  onSetValue={() => { setPicker(h); setValueInput(''); setError('') }}
+                />
               </Card>
             </li>
           ))}
@@ -163,11 +204,35 @@ function AllocationDonut({ data }: { data: { labels: string[]; datasets: { data:
   )
 }
 
-function HoldingRow({ h, onSetValue }: { h: Holding; onSetValue: () => void }) {
+function HoldingRow({
+  h,
+  isAdmin,
+  editing,
+  editName,
+  onEditName,
+  onStartEdit,
+  onSave,
+  onDelete,
+  onSetValue,
+}: {
+  h: Holding
+  isAdmin: boolean
+  editing: boolean
+  editName: string
+  onEditName: (value: string) => void
+  onStartEdit: () => void
+  onSave: () => void
+  onDelete: () => void
+  onSetValue: () => void
+}) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div>
-        <p className="font-medium text-[var(--text)]">{h.name}</p>
+        {editing ? (
+          <input value={editName} onChange={(e) => onEditName(e.target.value)} className="min-h-10 rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3" />
+        ) : (
+          <p className="font-medium text-[var(--text)]">{h.name}</p>
+        )}
         <p className="text-xs capitalize text-[var(--muted)]">
           {h.assetType}
           {h.symbol ? ` · ${h.symbol}` : ''}
@@ -187,6 +252,16 @@ function HoldingRow({ h, onSetValue }: { h: Holding; onSetValue: () => void }) {
       <button type="button" onClick={onSetValue} className="min-h-11 rounded-xl border border-[var(--border)] px-3 text-sm text-[var(--primary)]">
         Set value
       </button>
+      {isAdmin ? (
+        <>
+          <button type="button" onClick={editing ? onSave : onStartEdit} className="min-h-11 rounded-xl border border-[var(--border)] px-3 text-sm">
+            {editing ? 'Save' : 'Edit'}
+          </button>
+          <button type="button" onClick={onDelete} className="min-h-11 rounded-xl border border-[var(--expense)] px-3 text-sm text-[var(--expense)]">
+            Delete
+          </button>
+        </>
+      ) : null}
     </div>
   )
 }

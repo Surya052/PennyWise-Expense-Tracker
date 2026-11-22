@@ -35,6 +35,9 @@ model User {
   recurring          RecurringTransaction[]
   auditsMade         AdminAuditLog[] @relation("AuditAdmin")
   auditsTargeted     AdminAuditLog[] @relation("AuditTarget")
+  requestsOwned      ChangeRequest[] @relation("RequestOwner")
+  requestsMade       ChangeRequest[] @relation("RequestBy")
+  requestsReviewed   ChangeRequest[] @relation("RequestReviewer")
 }
 
 model Session {
@@ -239,4 +242,26 @@ model AdminAuditLog {
 
   @@index([adminId])
   @@index([createdAt])
+}
+
+model ChangeRequest {
+  id            String    @id @default(cuid())
+  ownerId       String
+  owner         User      @relation("RequestOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  requestedById String
+  requestedBy   User      @relation("RequestBy", fields: [requestedById], references: [id], onDelete: Cascade)
+  entity        String
+  entityId      String
+  action        String
+  payload       String    @default("{}")
+  summary       String    @default("")
+  status        String    @default("pending")
+  reviewedById  String?
+  reviewedBy    User?     @relation("RequestReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt    DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([status, createdAt])
+  @@index([ownerId])
+  @@index([requestedById])
 }

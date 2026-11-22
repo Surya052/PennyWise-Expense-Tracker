@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { apiFetch, ApiError } from '../lib/api'
+import { isPending } from '../lib/pending'
 import { Amount } from '../components/Amount'
 import { Card } from '../components/Card'
 import { Skeleton } from '../components/Skeleton'
@@ -14,11 +15,14 @@ type Account = {
 }
 
 export function Accounts() {
+  const isAdmin = true
   const [rows, setRows] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
   const [name, setName] = useState('')
   const [type, setType] = useState('cash')
   const [error, setError] = useState('')
+  const [editing, setEditing] = useState<Account | null>(null)
+  const [editName, setEditName] = useState('')
 
   function load() {
     void apiFetch<Account[]>('/accounts').then(setRows).finally(() => setLoading(false))
@@ -35,6 +39,33 @@ export function Accounts() {
       load()
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not create')
+    }
+  }
+
+  async function saveEdit() {
+    if (!editing) return
+    setError('')
+    try {
+      const result = await apiFetch(`/accounts/${editing.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name: editName, type: editing.type, color: editing.color, isArchived: editing.isArchived }),
+      })
+      setEditing(null)
+      if (!isPending(result)) load()
+      else setError('Waiting for admin approval')
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not update')
+    }
+  }
+
+  async function remove(id: string) {
+    setError('')
+    try {
+      const result = await apiFetch(`/accounts/${id}`, { method: 'DELETE' })
+      if (isPending(result)) setError('Waiting for admin approval')
+      else load()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not delete')
     }
   }
 
@@ -69,7 +100,7 @@ export function Accounts() {
         <ul className="flex flex-col gap-2">
           {rows.map((a) => (
             <li key={a.id}>
-              <Card className="flex items-center justify-between gap-3 p-3">
+              <Card className="flex flex-wrap items-center justify-between gap-3 p-3">
                 <div>
                   <p className="font-medium" style={{ color: a.color }}>
                     {a.name}
@@ -77,6 +108,26 @@ export function Accounts() {
                   <p className="text-xs capitalize text-[var(--muted)]">{a.type.replace('_', ' ')}</p>
                 </div>
                 <Amount paise={a.currentBalance} />
+                {isAdmin ? (
+                  <div className="flex w-full flex-col gap-2 sm:w-auto">
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => { setEditing(a); setEditName(a.name) }} className="min-h-10 rounded-xl border border-[var(--border)] px-3 text-sm">
+                        Edit
+                      </button>
+                      <button type="button" onClick={() => void remove(a.id)} className="min-h-10 rounded-xl border border-[var(--expense)] px-3 text-sm text-[var(--expense)]">
+                        Delete
+                      </button>
+                    </div>
+                    {editing?.id === a.id ? (
+                      <div className="flex gap-2">
+                        <input value={editName} onChange={(e) => setEditName(e.target.value)} className="min-h-10 min-w-0 flex-1 rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3" />
+                        <button type="button" onClick={() => void saveEdit()} className="min-h-10 rounded-xl bg-[var(--btn)] px-3 text-sm text-[var(--surface)]">
+                          Save
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
               </Card>
             </li>
           ))}

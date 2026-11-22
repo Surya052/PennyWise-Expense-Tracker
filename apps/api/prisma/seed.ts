@@ -53,11 +53,14 @@ async function main() {
           name,
           email,
           passwordHash,
-          role: 'admin',
+          role: 'super_admin',
           mustChangePassword: false,
         },
       });
-      console.log(`Seeded admin: ${email}`);
+      console.log(`Seeded super admin: ${email}`);
+    } else if (admin.role !== 'super_admin') {
+      admin = await prisma.user.update({ where: { id: admin.id }, data: { role: 'super_admin' } });
+      console.log(`Promoted super admin: ${email}`);
     }
     await seedCategories(admin.id);
   }

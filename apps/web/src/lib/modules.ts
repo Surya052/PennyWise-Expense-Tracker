@@ -19,7 +19,7 @@ const PATHS: Record<ModuleId, string[]> = {
 }
 
 export function canUse(modules: string[] | undefined, id: ModuleId, role?: string) {
-  if (role === 'admin') return true
+  if (role === 'admin' || role === 'super_admin') return true
   return (modules ?? []).includes(id)
 }
 

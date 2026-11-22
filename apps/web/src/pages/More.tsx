@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { canUse, type ModuleId } from '../lib/modules'
+import { APP_VERSION, isStaff } from '../lib/version'
 import { Card } from '../components/Card'
 import { apiFetch } from '../lib/api'
 
@@ -34,14 +35,20 @@ export function More() {
             </Link>
           </li>
         ))}
-        {user?.role === 'admin' ? (
+        {isStaff(user?.role) ? (
           <li>
             <Link to="/admin" className="block rounded-[18px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
               <p className="font-medium text-[var(--text)]">Admin</p>
-              <p className="text-sm text-[var(--muted)]">Users and audit</p>
+              <p className="text-sm text-[var(--muted)]">Users, their records, and approvals</p>
             </Link>
           </li>
         ) : null}
+        <li>
+          <Link to="/requests" className="block rounded-[18px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
+            <p className="font-medium text-[var(--text)]">{isStaff(user?.role) ? 'Requests' : 'My requests'}</p>
+            <p className="text-sm text-[var(--muted)]">{isStaff(user?.role) ? 'Approve edits and deletes' : 'Changes waiting for an admin'}</p>
+          </Link>
+        </li>
       </ul>
       <button
         type="button"
@@ -50,6 +57,7 @@ export function More() {
       >
         Sign out
       </button>
+      <p className="text-center text-xs text-[var(--muted)]">Version {APP_VERSION}</p>
     </div>
   )
 }

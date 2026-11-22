@@ -2,6 +2,7 @@ import { CanActivate, ExecutionContext, ForbiddenException, Injectable, Unauthor
 import { PrismaService } from './prisma.service';
 import { sha256 } from './common/password';
 import { moduleForPath, userModules } from './common/modules';
+import { isStaff } from './common/roles';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -33,7 +34,7 @@ export class AuthGuard implements CanActivate {
 export class AdminGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     const req = context.switchToHttp().getRequest();
-    if (req.user?.role !== 'admin') throw new ForbiddenException({ message: 'Admin only' });
+    if (!isStaff(req.user?.role)) throw new ForbiddenException({ message: 'Admin only' });
     return true;
   }
 }

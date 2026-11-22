@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import { AuthProvider, useAuth } from './lib/auth'
 import { ToastProvider } from './lib/toast'
+import { LoadingBar } from './components/LoadingBar'
 import { Shell } from './components/Shell'
 import { Login } from './pages/Login'
 import { Forgot } from './pages/Forgot'
@@ -20,6 +21,8 @@ import { Goals } from './pages/Goals'
 import { Recurring } from './pages/Recurring'
 import { Reports } from './pages/Reports'
 import { Admin } from './pages/Admin'
+import { UserBooks } from './pages/UserBooks'
+import { Requests } from './pages/Requests'
 import { canUse, firstAllowedPath, type ModuleId } from './lib/modules'
 
 function Spinner() {
@@ -68,6 +71,7 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <ToastProvider>
+          <LoadingBar />
           <Routes>
             <Route element={<PublicOnly />}>
               <Route path="/login" element={<Login />} />
@@ -91,6 +95,8 @@ export default function App() {
                 <Route path="recurring" element={<RequireModule module="recurring"><Recurring /></RequireModule>} />
                 <Route path="reports" element={<RequireModule module="reports"><Reports /></RequireModule>} />
                 <Route path="admin" element={<Admin />} />
+                <Route path="admin/users/:id" element={<UserBooks />} />
+                <Route path="requests" element={<Requests />} />
               </Route>
               <Route path="add" element={<RequireModule module="transactions"><AddTransaction /></RequireModule>} />
             </Route>

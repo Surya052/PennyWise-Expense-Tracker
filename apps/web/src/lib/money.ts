@@ -29,6 +29,21 @@ export function formatPaise(paise: string, currency = 'INR'): string {
   return `${neg ? '-' : ''}${SYMBOLS[code]}${grouped}.${frac}`
 }
 
+export function paiseToRupeeInput(paise: string): string {
+  let value = BigInt(paise || '0')
+  const neg = value < 0n
+  if (neg) value = -value
+  const whole = value / 100n
+  const frac = value % 100n
+  const text = frac === 0n ? whole.toString() : `${whole}.${frac.toString().padStart(2, '0')}`.replace(/0$/, '')
+  return neg ? `-${text}` : text
+}
+
+export function rupeeAmount(input: string): string {
+  const trimmed = input.trim().replace(/\.+$/, '')
+  return trimmed || '0'
+}
+
 export function rupeesKeypadToPaise(input: string): string {
   const s = input.trim() || '0'
   const neg = s.startsWith('-')

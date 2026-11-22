@@ -7,6 +7,7 @@ import { assertNotLastAdmin, normalizeEmail, publicUser } from './auth.service';
 import { assertPassword } from './common/password';
 import { fail } from './common/money';
 import { normalizeModules, userModules } from './common/modules';
+import { isStaff, isSuper } from './common/roles';
 import { kolkataStart, todayInKolkata } from './common/dates';
 
 @Injectable()
@@ -52,6 +53,7 @@ export class AdminService {
     const email = normalizeEmail(body.email);
     const password = assertPassword(body.password);
     const role = body.role === 'admin' ? 'admin' : 'user';
+    if (role === 'admin' && !isSuper(admin.role)) fail('Only a super admin can create an admin');
     const modules = normalizeModules(body.modules, role);
     const existing = await this.prisma.user.findUnique({ where: { email } });
     if (existing) fail('That email is already in use');
@@ -68,10 +70,12 @@ export class AdminService {
     const user = await this.mustUser(id);
     const name = body.name == null ? user.name : String(body.name).trim();
     if (!name || name.length > 80) fail('Name is required');
-    const role = body.role == null ? user.role : body.role === 'admin' ? 'admin' : 'user';
+    if (user.role !== 'user' && !isSuper(admin.role)) fail('Only a super admin can change an admin');
+    if (user.role === 'super_admin' && admin.id !== user.id) fail('That super admin account stays as it is');
+    const role = body.role == null ? user.role : nextRole(admin, String(body.role));
     const isActive = body.isActive == null ? user.isActive : Boolean(body.isActive);
     const modules = body.modules == null ? userModules({ role, modules: user.modules }) : normalizeModules(body.modules, role);
-    if ((role !== 'admin' || !isActive) && user.role === 'admin' && user.isActive) {
+    if ((!isStaff(role) || !isActive) && isStaff(user.role) && user.isActive) {
       await assertNotLastAdmin(this.prisma, user);
     }
     const updated = await this.prisma.user.update({ where: { id }, data: { name, role, isActive, modules } });
@@ -82,6 +86,8 @@ export class AdminService {
 
   async resetPassword(admin: User, id: string, body: Record<string, unknown>, ip: string) {
     const user = await this.mustUser(id);
+    if (user.role !== 'user' && !isSuper(admin.role)) fail('Only a super admin can change an admin');
+    if (user.role === 'super_admin' && admin.id !== user.id) fail('That super admin account stays as it is');
     const password = assertPassword(body.password);
     const passwordHash = await bcrypt.hash(password, 12);
     await this.prisma.user.update({ where: { id }, data: { passwordHash, mustChangePassword: true } });
@@ -93,6 +99,8 @@ export class AdminService {
   async remove(admin: User, id: string, ip: string) {
     const user = await this.mustUser(id);
     if (user.id === admin.id) fail('Delete your own account from settings');
+    if (user.role === 'super_admin') fail('The super admin account stays as it is');
+    if (user.role !== 'user' && !isSuper(admin.role)) fail('Only a super admin can delete an admin');
     await assertNotLastAdmin(this.prisma, user);
     await this.books.removeUserFiles(id);
     await this.audit(admin, 'user.delete', null, { email: user.email, name: user.name }, ip);
@@ -133,6 +141,12 @@ export class AdminService {
       },
     });
   }
+}
+
+function nextRole(actor: User, requested: string) {
+  if (!['user', 'admin'].includes(requested)) fail('Unknown role');
+  if (requested === 'admin' && !isSuper(actor.role)) fail('Only a super admin can create an admin');
+  return requested;
 }
 
 function safeMeta(raw: string) {

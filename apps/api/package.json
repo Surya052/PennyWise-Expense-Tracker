@@ -1,6 +1,7 @@
 {
   "name": "pennywise-api",
   "private": true,
+  "version": "1.0.0",
   "scripts": {
     "dev": "nest start --watch",
     "build": "npm run build --prefix ../web && prisma generate && nest build",
