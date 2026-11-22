@@ -7,6 +7,7 @@ import { Card } from '../components/Card'
 
 type Account = { id: string; name: string; isArchived?: boolean }
 type Category = { id: string; name: string; type: string; color: string }
+type Holding = { id: string; name: string }
 
 const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫']
 
@@ -22,6 +23,9 @@ export function AddTransaction() {
   const [note, setNote] = useState('')
   const [accounts, setAccounts] = useState<Account[]>([])
   const [categories, setCategories] = useState<Category[]>([])
+  const [holdings, setHoldings] = useState<Holding[]>([])
+  const [holdingId, setHoldingId] = useState('')
+  const [holdingName, setHoldingName] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -29,10 +33,13 @@ export function AddTransaction() {
     void Promise.all([
       apiFetch<Account[]>('/accounts'),
       apiFetch<Category[]>('/categories'),
-    ]).then(([a, c]) => {
+      apiFetch<{ holdings: Holding[] }>('/holdings'),
+    ]).then(([a, c, h]) => {
       setAccounts(a.filter((x) => !x.isArchived))
       setCategories(c)
+      setHoldings(h.holdings)
       if (a[0]) setAccountId(a[0].id)
+      if (h.holdings[0]) setHoldingId(h.holdings[0].id)
     })
   }, [])
 
@@ -64,7 +71,19 @@ export function AddTransaction() {
       if (type === 'transfer') body.toAccountId = toAccountId
       if (categoryId && type !== 'transfer') body.categoryId = categoryId
       if (type === 'investment') {
+        let id = holdingId
+        if (!id) {
+          const name = holdingName.trim() || note.trim()
+          if (!name) throw new ApiError('Enter a holding name', 400)
+          const created = await apiFetch<Holding>('/holdings', {
+            method: 'POST',
+            body: JSON.stringify({ name, assetType: 'other' }),
+          })
+          id = created.id
+        }
+        body.holdingId = id
         body.action = 'buy'
+        body.units = '1'
       }
       await apiFetch('/transactions', { method: 'POST', body: JSON.stringify(body) })
       toast.show('Transaction saved')
@@ -126,6 +145,32 @@ export function AddTransaction() {
           ))}
         </select>
       </label>
+      {type === 'investment' ? (
+        <>
+          <label className="flex flex-col gap-1 text-sm">
+            Holding
+            <select value={holdingId} onChange={(e) => setHoldingId(e.target.value)} className="min-h-11 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3">
+              <option value="">New holding</option>
+              {holdings.map((h) => (
+                <option key={h.id} value={h.id}>
+                  {h.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          {holdingId ? null : (
+            <label className="flex flex-col gap-1 text-sm">
+              Holding name
+              <input
+                value={holdingName}
+                onChange={(e) => setHoldingName(e.target.value)}
+                placeholder="Mutual fund, gold, FD"
+                className="min-h-11 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3"
+              />
+            </label>
+          )}
+        </>
+      ) : null}
       {type === 'transfer' ? (
         <label className="flex flex-col gap-1 text-sm">
           To account

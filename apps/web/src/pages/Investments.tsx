@@ -31,6 +31,8 @@ export function Investments() {
   const [picker, setPicker] = useState<Holding | null>(null)
   const [valueInput, setValueInput] = useState('')
   const [error, setError] = useState('')
+  const [newName, setNewName] = useState('')
+  const [creating, setCreating] = useState(false)
 
   function load() {
     setLoading(true)
@@ -52,6 +54,22 @@ export function Investments() {
     const values = labels.map((l) => Number(buckets.get(l) ?? 0n) / 100)
     return { labels, datasets: [{ data: values, backgroundColor: labels.map(() => 'var(--invest)'), borderWidth: 0 }] }
   }, [data])
+
+  async function createHolding() {
+    const name = newName.trim()
+    if (!name) return
+    setCreating(true)
+    setError('')
+    try {
+      await apiFetch('/holdings', { method: 'POST', body: JSON.stringify({ name, assetType: 'other' }) })
+      setNewName('')
+      load()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not add holding')
+    } finally {
+      setCreating(false)
+    }
+  }
 
   async function saveValue() {
     if (!picker) return
@@ -101,8 +119,21 @@ export function Investments() {
           ))}
         </ul>
       ) : (
-        <Card>
-          <p className="text-sm text-[var(--muted)]">No holdings yet. Record an investment transaction to begin.</p>
+        <Card className="flex flex-col gap-3">
+          <p className="text-sm text-[var(--muted)]">Add a holding, then record an investment against it.</p>
+          <label className="flex flex-col gap-1 text-sm">
+            Holding name
+            <input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="Mutual fund, gold, FD"
+              className="min-h-11 rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3"
+            />
+          </label>
+          {error && !picker ? <p className="text-sm text-[var(--expense)]">{error}</p> : null}
+          <button type="button" disabled={creating || !newName.trim()} onClick={() => void createHolding()} className="min-h-11 rounded-2xl bg-[var(--btn)] font-semibold text-[var(--surface)] disabled:opacity-60">
+            {creating ? 'Adding…' : 'Add holding'}
+          </button>
         </Card>
       )}
       <BottomSheet open={Boolean(picker)} title="Update current value" onClose={() => setPicker(null)}>
